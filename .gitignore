@@ -1,0 +1,4 @@
+*.py[cod]
+*.pkl
+.ipynb_checkpoints
+*.hdf5
