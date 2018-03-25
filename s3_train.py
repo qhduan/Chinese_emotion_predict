@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from keras import layers, models
 from keras import callbacks, optimizers
+from keras import regularizers
 
 from utils import MAX_LENGTH, LABEL_DICT
 
@@ -16,42 +17,37 @@ def build_model(shape, vocab_size):
 
     m = input_layer
     m = layers.Embedding(vocab_size, 300)(m)
-    
-    cnn_shape = (1, 2, 3, 4, 5, 6)
-    cnns = []
-    for i in cnn_shape:
-        cnn = m
-        cnn = layers.Conv1D(4, i, padding='same', activation='relu')(cnn)
-        cnn = layers.Conv1D(1, 1, padding='same', activation='linear')(cnn)
-        cnns.append(cnn)
-    
-    cnns = layers.Concatenate()(cnns)
-    cnns = layers.Flatten()(cnns)
+    m = layers.Dropout(0.2)(m)
+    m = layers.Bidirectional(
+        layers.GRU(32, return_sequences=True, recurrent_dropout=0.05)
+    )(m)
 
-    atten = cnns
-    atten = layers.Dense(len(cnn_shape) * shape[0], activation='softmax')(atten)
+    atten = m
+    atten = layers.Flatten()(atten)
+    atten = layers.Dense(shape[0], activation='softmax')(atten)
+    atten = layers.RepeatVector(64)(atten)
+    atten = layers.Permute((2, 1))(atten)
 
-    cnns = layers.Activation('relu')(cnns)
-    cnns = layers.Multiply()([cnns, atten])
+    m = layers.Multiply()([m, atten])
+    m = layers.Flatten()(m)
 
-    m = cnns
-    m = layers.Dense(100, activation='linear')(m)
+    m = layers.Dense(100, activation='linear', kernel_regularizer=regularizers.l2(0.01))(m)
     m = layers.BatchNormalization()(m)
     m = layers.Activation('relu')(m)
     m = layers.Dropout(0.5)(m)
-    m = layers.Dense(100, activation='linear')(m)
+    m = layers.Dense(100, activation='linear', kernel_regularizer=regularizers.l2(0.01))(m)
     m = layers.BatchNormalization()(m)
     m = layers.Activation('relu')(m)
     m = layers.Dropout(0.5)(m)
     m = layers.Dense(len(LABEL_DICT), activation='softmax')(m)
 
     atten_model = models.Model(
-        inputs=input_layer,
+        inputs=[input_layer],
         outputs=atten
     )
 
     model = models.Model(
-        inputs=input_layer,
+        inputs=[input_layer],
         outputs=m
     )
 
@@ -79,12 +75,12 @@ def main():
     model, atten_model = build_model(input_shape, len(ws))
 
     nb_epoch = 20
-    batch_size = 64
+    batch_size = 64 * 8
     steps_per_epoch = int(len(x_train) / batch_size) + 1
     validation_steps = int(len(x_test) / batch_size) + 1
 
-    model.save_weights('./model_last_weights.hdf5')
-    atten_model.save_weights('./model_last_weights.hdf5')
+    model.save_weights('./model_gru_last_weights.hdf5')
+    atten_model.save_weights('./model_gru_last_weights.hdf5')
 
     model.fit_generator(
         generator=batch_flow(
@@ -101,14 +97,14 @@ def main():
             callbacks.ReduceLROnPlateau(min_lr=1e-6),
             callbacks.ModelCheckpoint(
                 monitor='val_acc',
-                filepath='./model_weights.hdf5',
+                filepath='./model_gru_weights.hdf5',
                 verbose=1,
                 save_best_only=True)
         ]
     )
 
-    model.save_weights('./model_last_weights.hdf5')
-    atten_model.save_weights('./model_last_weights.hdf5')
+    model.save_weights('./model_gru_last_weights.hdf5')
+    atten_model.save_weights('./model_gru_last_weights.hdf5')
 
 
 def batch_flow(inputs, targets, batch_size=32):
