@@ -7,5 +7,4 @@ LABEL_DICT = {
     'disgust': 3,
     'fear': 4,
     'suprise': 5,
-    'neutral': 6,
 }

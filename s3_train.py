@@ -16,29 +16,50 @@ def build_model(shape, vocab_size):
     input_layer = layers.Input(shape=shape)
 
     m = input_layer
-    m = layers.Embedding(vocab_size, 300)(m)
-    m = layers.Dropout(0.2)(m)
-    m = layers.Bidirectional(
-        layers.GRU(32, return_sequences=True, recurrent_dropout=0.05)
+    m = layers.Embedding(vocab_size, 64)(m)
+    m = layers.Dropout(0.1)(m)
+
+    m = layers.GRU(
+        32,
+        return_sequences=True,
+        # recurrent_dropout=0.2,
+        kernel_regularizer=regularizers.l2(0.001)
+    )(m)
+
+    m = layers.GRU(
+        32,
+        return_sequences=True,
+        # recurrent_dropout=0.2,
+        kernel_regularizer=regularizers.l2(0.001)
     )(m)
 
     atten = m
     atten = layers.Flatten()(atten)
     atten = layers.Dense(shape[0], activation='softmax')(atten)
-    atten = layers.RepeatVector(64)(atten)
+    atten = layers.RepeatVector(32)(atten)
     atten = layers.Permute((2, 1))(atten)
 
     m = layers.Multiply()([m, atten])
-    m = layers.Flatten()(m)
 
-    m = layers.Dense(100, activation='linear', kernel_regularizer=regularizers.l2(0.01))(m)
+    # m = layers.Add()([m, emb])
+
+    m = layers.Flatten()(m)
+    m = layers.GaussianNoise(0.01)(m)
+
+    m = layers.Dense(
+        300, activation='linear',
+        kernel_regularizer=regularizers.l2(0.01)
+    )(m)
     m = layers.BatchNormalization()(m)
-    m = layers.Activation('relu')(m)
-    m = layers.Dropout(0.5)(m)
-    m = layers.Dense(100, activation='linear', kernel_regularizer=regularizers.l2(0.01))(m)
+    m = layers.Activation('tanh')(m)
+    m = layers.Dropout(0.4)(m)
+    m = layers.Dense(
+        300, activation='linear',
+        kernel_regularizer=regularizers.l2(0.01)
+    )(m)
     m = layers.BatchNormalization()(m)
-    m = layers.Activation('relu')(m)
-    m = layers.Dropout(0.5)(m)
+    m = layers.Activation('tanh')(m)
+    m = layers.Dropout(0.4)(m)
     m = layers.Dense(len(LABEL_DICT), activation='softmax')(m)
 
     atten_model = models.Model(
